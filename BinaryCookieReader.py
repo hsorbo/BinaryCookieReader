@@ -2,7 +2,7 @@
 # Based on BinaryCookieReader: Written By Satishb3 (http://www.securitylearn.net)        #
 
 import sys
-from struct import unpack
+from struct import unpack, calcsize
 from StringIO import StringIO
 from time import strftime, gmtime, mktime
 import cookielib
@@ -11,6 +11,18 @@ FLAG_NONE     = 0
 FLAG_SECURE   = 1	
 FLAG_HTTP     = 4
 FLAG_BOTH 	  = FLAG_SECURE | FLAG_HTTP
+
+#Mac epoch format: Starts from 1/Jan/2001
+def from_mac_epoc(x): return x+978307200
+
+def seek_read_string(cookie, seekto):
+	cookie.seek(seekto)
+	val = ''
+	u=cookie.read(1)
+	while unpack('<b',u)[0]!=0:
+		val=val+str(u)
+		u=cookie.read(1)
+	return val
 
 def parse(binary_file):
 	file_header=binary_file.read(4)                             #File Magic String:cook 
@@ -39,59 +51,30 @@ def parse(binary_file):
 
 		page.read(4)                                            #end of page header: Always 00000000
 
-		cookie=''
 		for offset in cookie_offsets:
-			page.seek(offset)                                   #Move the page pointer to the cookie starting point
-			cookiesize=unpack('<i',page.read(4))[0]             #fetch cookie size
-			cookie=StringIO(page.read(cookiesize))              #read the complete cookie 
-			
-			cookie.read(4)                                      #unknown
-			
-			flags=unpack('<i',cookie.read(4))[0]                #Cookie flags:  1=secure, 4=httponly, 5=secure+httponly
-			cookie.read(4)                                      #unknown
-			
-			urloffset=unpack('<i',cookie.read(4))[0]            #cookie domain offset from cookie starting point
-			nameoffset=unpack('<i',cookie.read(4))[0]           #cookie name offset from cookie starting point
-			pathoffset=unpack('<i',cookie.read(4))[0]           #cookie path offset from cookie starting point
-			valueoffset=unpack('<i',cookie.read(4))[0]          #cookie value offset from cookie starting point
-			
-			endofcookie=cookie.read(8)                          #end of cookie
-			expiry_date_epoch= unpack('<d',cookie.read(8))[0]+978307200          #Expiry date is in Mac epoch format: Starts from 1/Jan/2001
-			create_date_epoch=unpack('<d',cookie.read(8))[0]+978307200           #Cookies creation time
-			
-			cookie.seek(urloffset-4)                            #fetch domaain value from url offset
-			url=''
-			u=cookie.read(1)
-			while unpack('<b',u)[0]!=0:
-				url=url+str(u)
-				u=cookie.read(1)
-					
-			cookie.seek(nameoffset-4)                           #fetch cookie name from name offset
-			name=''
-			n=cookie.read(1)
-			while unpack('<b',n)[0]!=0:
-				name=name+str(n)
-				n=cookie.read(1)
-					
-			cookie.seek(pathoffset-4)                          #fetch cookie path from path offset
-			path=''
-			pa=cookie.read(1)
-			while unpack('<b',pa)[0]!=0:
-				path=path+str(pa)
-				pa=cookie.read(1)
-					
-			cookie.seek(valueoffset-4)                         #fetch cookie value from value offset
-			value=''
-			va=cookie.read(1)
-			while unpack('<b',va)[0]!=0:
-				value=value+str(va)
-				va=cookie.read(1)
+			page.seek(offset)
+			fmt = '<i 4x i 4x iiii 8x d d'
+			(cookiesize, 
+			 flags, 
+			 urloffset, 
+			 nameoffset, 
+			 pathoffset, 
+			 valueoffset, 
+			 expiry_date_epoch, 
+			 create_date_epoch) = unpack(fmt, page.read(calcsize(fmt)))
+
+			page.seek(offset)								 
+			cookie=StringIO(page.read(cookiesize))            
+			url = seek_read_string(cookie, urloffset)
+			name = seek_read_string(cookie, nameoffset)
+			path = seek_read_string(cookie, pathoffset)
+			value = seek_read_string(cookie, valueoffset)
 
 			yield cookielib.Cookie(
 				version=0, 
 				name=name, 
 				value=value, 
-				expires=expiry_date_epoch, 
+				expires=from_mac_epoc(expiry_date_epoch), 
 				port=None, 
 				port_specified=False, 
 				domain=url, 
@@ -105,7 +88,7 @@ def parse(binary_file):
 				comment_url=None, 
 				rest={'HttpOnly': flags in [FLAG_HTTP,FLAG_BOTH]}, 
 				rfc2109=False)
-				
+
 	binary_file.close()
 
 def dump_netscape(binary_file):
