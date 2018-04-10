@@ -19,7 +19,7 @@ from StringIO import StringIO
 from time import strftime, gmtime
 	
 
-def dump(binary_file):
+def parse(binary_file):
 	file_header=binary_file.read(4)                             #File Magic String:cook 
 
 	if str(file_header)!='cook':
@@ -110,10 +110,12 @@ def dump(binary_file):
 			while unpack('<b',va)[0]!=0:
 				value=value+str(va)
 				va=cookie.read(1)
-			
-			print 'Cookie : '+name+'='+value+'; domain='+url+'; path='+path+'; '+'expires='+expiry_date+'; '+cookie_flags
+			yield {"name":name, "value":value, "domain":url, "path":path, "expires":expiry_date, "flags": cookie_flags}
 			
 	binary_file.close()
+
+def dump(binary_file):
+    for x in parse(binary_file): print(x)
 
 
 if __name__ == "__main__":
