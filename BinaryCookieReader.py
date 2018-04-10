@@ -17,7 +17,11 @@ import sys
 from struct import unpack
 from StringIO import StringIO
 from time import strftime, gmtime
-	
+
+FLAG_NONE     = 0
+FLAG_SECURE   = 1	
+FLAG_HTTP     = 4
+FLAG_BOTH 	  = FLAG_SECURE | FLAG_HTTP
 
 def parse(binary_file):
 	file_header=binary_file.read(4)                             #File Magic String:cook 
@@ -55,18 +59,6 @@ def parse(binary_file):
 			cookie.read(4)                                      #unknown
 			
 			flags=unpack('<i',cookie.read(4))[0]                #Cookie flags:  1=secure, 4=httponly, 5=secure+httponly
-			cookie_flags=''
-			if flags==0:
-				cookie_flags=''
-			elif flags==1:
-				cookie_flags='Secure'
-			elif flags==4:
-				cookie_flags='HttpOnly'
-			elif flags==5:
-				cookie_flags='Secure; HttpOnly'
-			else:
-				cookie_flags='Unknown'
-				
 			cookie.read(4)                                      #unknown
 			
 			urloffset=unpack('<i',cookie.read(4))[0]            #cookie domain offset from cookie starting point
@@ -77,11 +69,10 @@ def parse(binary_file):
 			endofcookie=cookie.read(8)                          #end of cookie
 									
 			expiry_date_epoch= unpack('<d',cookie.read(8))[0]+978307200          #Expiry date is in Mac epoch format: Starts from 1/Jan/2001
-			expiry_date=strftime("%a, %d %b %Y ",gmtime(expiry_date_epoch))[:-1] #978307200 is unix epoch of  1/Jan/2001 //[:-1] strips the last space
+			expiry_date=gmtime(expiry_date_epoch) 								  #978307200 is unix epoch of  1/Jan/2001 
 					
 			create_date_epoch=unpack('<d',cookie.read(8))[0]+978307200           #Cookies creation time
-			create_date=strftime("%a, %d %b %Y ",gmtime(create_date_epoch))[:-1]
-			#print create_date
+			create_date = gmtime(create_date_epoch)
 			
 			cookie.seek(urloffset-4)                            #fetch domaain value from url offset
 			url=''
@@ -110,12 +101,26 @@ def parse(binary_file):
 			while unpack('<b',va)[0]!=0:
 				value=value+str(va)
 				va=cookie.read(1)
-			yield {"name":name, "value":value, "domain":url, "path":path, "expires":expiry_date, "flags": cookie_flags}
+			yield {"name":name, "value":value, "domain":url, "path":path, "expires":expiry_date, "flags": flags}
 			
 	binary_file.close()
 
 def dump(binary_file):
-    for x in parse(binary_file): print(x)
+    def format_flag(flag):
+		if flag == FLAG_NONE: return ""
+		if flag == FLAG_SECURE: return "Secure"
+		if flag == FLAG_HTTP: return "HttpOnly"
+		if flag == FLAG_BOTH: return "Secure; HttpOnly"
+		return "Unknown"
+    for x in parse(binary_file): 
+		line = "Cookie : '%s'='%s'; domain='%s'; path='%s'; expires='%s'; '%s'" % (
+			x["name"],
+			x["value"], 
+			x["domain"], 
+			x["path"], 
+			strftime("%a, %d %b %Y ",x["expires"])[:-1], 
+			format_flag(x["flags"]) )
+		print(line)
 
 
 if __name__ == "__main__":
