@@ -115,9 +115,6 @@ def dump(binary_file):
 			
 	binary_file.close()
 
-print "#*************************************************************************#"
-print "# BinaryCookieReader: developed by Satishb3: http://www.securitylearn.net #"
-print "#*************************************************************************#"
 
 if __name__ == "__main__":
 	if len(sys.argv)!=2:
@@ -127,6 +124,9 @@ if __name__ == "__main__":
 		filename = sys.argv[1]
 		try:
 			binary_file=open(filename,'rb')
+			print "#*************************************************************************#"
+			print "# BinaryCookieReader: developed by Satishb3: http://www.securitylearn.net #"
+			print "#*************************************************************************#"
 			dump(binary_file)
 		except IOError as e:
 			print 'File Not Found :'+ filename
