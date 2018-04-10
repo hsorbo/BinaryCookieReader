@@ -16,7 +16,7 @@
 import sys
 from struct import unpack
 from StringIO import StringIO
-from time import strftime, gmtime
+from time import strftime, gmtime, mktime
 
 FLAG_NONE     = 0
 FLAG_SECURE   = 1	
@@ -123,17 +123,27 @@ def dump(binary_file):
 		print(line)
 
 
+def dump_netscape(binary_file):
+    for x in parse(binary_file): 
+		line = "%s\t%s\t%s\t%s\t%i\t%s\t%s" % (
+			x["domain"],
+			("TRUE" if x["flags"] in [FLAG_HTTP,FLAG_BOTH] else "FALSE"),
+			x["path"], 
+			("TRUE" if x["flags"] in [FLAG_SECURE,FLAG_BOTH] else "FALSE"),
+			mktime(x["expires"]),
+			x["name"],
+			x["value"])
+		print(line)
+
+
 if __name__ == "__main__":
 	if len(sys.argv)!=2:
-		print "\nUsage: Python BinaryCookieReader.py [Full path to Cookies.binarycookies file] \n"
-		print "Example: Python BinaryCookieReader.py C:\Cookies.binarycookies"
+		print("\nUsage: Python BinaryCookieReader.py [Full path to Cookies.binarycookies file] \n")
+		print("Example: Python BinaryCookieReader.py ~/Library/Cookies/Cookies.binarycookies")
 	else:
 		filename = sys.argv[1]
 		try:
 			binary_file=open(filename,'rb')
-			print "#*************************************************************************#"
-			print "# BinaryCookieReader: developed by Satishb3: http://www.securitylearn.net #"
-			print "#*************************************************************************#"
-			dump(binary_file)
+			dump_netscape(binary_file)
 		except IOError as e:
-			print 'File Not Found :'+ filename
+			print('File Not Found :'+ filename)
