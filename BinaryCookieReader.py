@@ -24,6 +24,41 @@ def seek_read_string(cookie, seekto):
 		u=cookie.read(1)
 	return val
 
+def parse_raw_cookie(raw_cookie):
+	header_format = '<i 4x i 4x iiii 8x d d'
+	header_size = calcsize(header_format)
+	header_raw = raw_cookie[0:header_size]
+	
+	(cookiesize,
+	 flags, 
+	 urloffset, 
+	 nameoffset, 
+	 pathoffset, 
+	 valueoffset, 
+	 expiry_date_epoch, 
+	 create_date_epoch) = unpack(header_format, header_raw)
+
+	cookie=StringIO(raw_cookie)
+	return cookielib.Cookie(
+		version=0, 
+		name=seek_read_string(cookie, nameoffset), 
+		value=seek_read_string(cookie, valueoffset), 
+		expires=from_mac_epoc(expiry_date_epoch), 
+		port=None, 
+		port_specified=False, 
+		domain=seek_read_string(cookie, urloffset), 
+		domain_specified=True, 
+		domain_initial_dot=False, 
+		path=seek_read_string(cookie, pathoffset), 
+		path_specified=True, 
+		secure= flags in [FLAG_HTTP,FLAG_BOTH], 
+		discard=False, 
+		comment=None, 
+		comment_url=None, 
+		rest={'HttpOnly': flags in [FLAG_HTTP,FLAG_BOTH]}, 
+		rfc2109=False)
+    	
+
 def parse(binary_file):
 	file_header=binary_file.read(4)                             #File Magic String:cook 
 
@@ -53,41 +88,10 @@ def parse(binary_file):
 
 		for offset in cookie_offsets:
 			page.seek(offset)
-			fmt = '<i 4x i 4x iiii 8x d d'
-			(cookiesize, 
-			 flags, 
-			 urloffset, 
-			 nameoffset, 
-			 pathoffset, 
-			 valueoffset, 
-			 expiry_date_epoch, 
-			 create_date_epoch) = unpack(fmt, page.read(calcsize(fmt)))
-
-			page.seek(offset)								 
-			cookie=StringIO(page.read(cookiesize))            
-			url = seek_read_string(cookie, urloffset)
-			name = seek_read_string(cookie, nameoffset)
-			path = seek_read_string(cookie, pathoffset)
-			value = seek_read_string(cookie, valueoffset)
-
-			yield cookielib.Cookie(
-				version=0, 
-				name=name, 
-				value=value, 
-				expires=from_mac_epoc(expiry_date_epoch), 
-				port=None, 
-				port_specified=False, 
-				domain=url, 
-				domain_specified=True, 
-				domain_initial_dot=False, 
-				path=path, 
-				path_specified=True, 
-				secure= flags in [FLAG_HTTP,FLAG_BOTH], 
-				discard=False, 
-				comment=None, 
-				comment_url=None, 
-				rest={'HttpOnly': flags in [FLAG_HTTP,FLAG_BOTH]}, 
-				rfc2109=False)
+			cookiesize =  unpack("<i",page.read(4))[0]
+			page.seek(offset)
+			raw_cookie = page.read(cookiesize)
+			yield parse_raw_cookie(raw_cookie)
 
 	binary_file.close()
 
