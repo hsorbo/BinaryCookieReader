@@ -1,22 +1,11 @@
 #!/usr/bin/env python
-
-#*******************************************************************************#
-# BinaryCookieReader: Written By Satishb3 (http://www.securitylearn.net)        #
-#                                                                               #
-# For any bug fixes contact me: satishb3@securitylearn.net                      #
-#                                                                               #
-# Usage: Python BinaryCookieReader.py Cookie.Binarycookies-FilePath             #
-#                                                                               #
-# Safari browser and iOS applications store the persistent cookies in a binary  #
-# file names Cookies.binarycookies.BinaryCookieReader is used to dump all the   #
-# cookies from the binary Cookies.binarycookies file.                           #
-#                                                                               #
-#*******************************************************************************#
+# Based on BinaryCookieReader: Written By Satishb3 (http://www.securitylearn.net)        #
 
 import sys
 from struct import unpack
 from StringIO import StringIO
 from time import strftime, gmtime, mktime
+import cookielib
 
 FLAG_NONE     = 0
 FLAG_SECURE   = 1	
@@ -67,12 +56,8 @@ def parse(binary_file):
 			valueoffset=unpack('<i',cookie.read(4))[0]          #cookie value offset from cookie starting point
 			
 			endofcookie=cookie.read(8)                          #end of cookie
-									
 			expiry_date_epoch= unpack('<d',cookie.read(8))[0]+978307200          #Expiry date is in Mac epoch format: Starts from 1/Jan/2001
-			expiry_date=gmtime(expiry_date_epoch) 								  #978307200 is unix epoch of  1/Jan/2001 
-					
 			create_date_epoch=unpack('<d',cookie.read(8))[0]+978307200           #Cookies creation time
-			create_date = gmtime(create_date_epoch)
 			
 			cookie.seek(urloffset-4)                            #fetch domaain value from url offset
 			url=''
@@ -101,39 +86,33 @@ def parse(binary_file):
 			while unpack('<b',va)[0]!=0:
 				value=value+str(va)
 				va=cookie.read(1)
-			yield {"name":name, "value":value, "domain":url, "path":path, "expires":expiry_date, "flags": flags}
-			
+
+			yield cookielib.Cookie(
+				version=0, 
+				name=name, 
+				value=value, 
+				expires=expiry_date_epoch, 
+				port=None, 
+				port_specified=False, 
+				domain=url, 
+				domain_specified=True, 
+				domain_initial_dot=False, 
+				path=path, 
+				path_specified=True, 
+				secure= flags in [FLAG_HTTP,FLAG_BOTH], 
+				discard=False, 
+				comment=None, 
+				comment_url=None, 
+				rest={'HttpOnly': flags in [FLAG_HTTP,FLAG_BOTH]}, 
+				rfc2109=False)
+				
 	binary_file.close()
 
-def dump(binary_file):
-    def format_flag(flag):
-		if flag == FLAG_NONE: return ""
-		if flag == FLAG_SECURE: return "Secure"
-		if flag == FLAG_HTTP: return "HttpOnly"
-		if flag == FLAG_BOTH: return "Secure; HttpOnly"
-		return "Unknown"
-    for x in parse(binary_file): 
-		line = "Cookie : '%s'='%s'; domain='%s'; path='%s'; expires='%s'; '%s'" % (
-			x["name"],
-			x["value"], 
-			x["domain"], 
-			x["path"], 
-			strftime("%a, %d %b %Y ",x["expires"])[:-1], 
-			format_flag(x["flags"]) )
-		print(line)
-
-
 def dump_netscape(binary_file):
+    cookies = cookielib.MozillaCookieJar()
     for x in parse(binary_file): 
-		line = "%s\t%s\t%s\t%s\t%i\t%s\t%s" % (
-			x["domain"],
-			("TRUE" if x["flags"] in [FLAG_HTTP,FLAG_BOTH] else "FALSE"),
-			x["path"], 
-			("TRUE" if x["flags"] in [FLAG_SECURE,FLAG_BOTH] else "FALSE"),
-			mktime(x["expires"]),
-			x["name"],
-			x["value"])
-		print(line)
+        cookies.set_cookie(x)		
+    cookies.save("cookies.txt", ignore_discard=True, ignore_expires=True)
 
 
 if __name__ == "__main__":
