@@ -51,7 +51,7 @@ def parse_raw_cookie(raw_cookie):
 		domain_initial_dot=False, 
 		path=seek_read_string(cookie, pathoffset), 
 		path_specified=True, 
-		secure= flags in [FLAG_HTTP,FLAG_BOTH], 
+		secure= flags in [FLAG_SECURE,FLAG_BOTH], 
 		discard=False, 
 		comment=None, 
 		comment_url=None, 
